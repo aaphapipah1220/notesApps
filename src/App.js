@@ -1,25 +1,143 @@
-import logo from './logo.svg';
-import './App.css';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import Navigation from './components/Navigation';
+import HomePage from './pages/HomePage';
+import AddPage from './pages/AddPage';
+import DetailPage from './pages/DetailPage';
+import RegisterPage from './pages/RegisterPage';
+import LoginPage from './pages/LoginPage';
+import { getUserLogged, putAccessToken } from './utils/api';
+import ToggleTheme from './components/ToggleTheme';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { LocaleProvider } from './contexts/LocaleContext';
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+class App extends React.Component {
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      authedUser: null,
+      initializing: true,
+      theme: localStorage.getItem('theme') || 'light',
+      toggleTheme: () => {
+        this.setState((prevState) => {
+          const newTheme = prevState.theme === 'light' ? 'dark' : 'light';
+          localStorage.setItem('theme', newTheme);
+
+          return {
+            theme: newTheme
+          };
+        });
+      },
+
+      localeContext: {
+        locale: localStorage.getItem('locale') || 'id',
+        toggleLocale: () => {
+          this.setState((prevState) => {
+            const newLocale = prevState.localeContext.locale === 'id' ? 'en' : 'id';
+            localStorage.setItem('locale', newLocale);
+            return {
+              localeContext: {
+                ...prevState.localeContext,
+                locale: newLocale
+              }
+            }
+          });
+        }
+      }
+    };
+
+    this. onLoginSuccess = this.onLoginSuccess.bind(this);
+    this.onLogout = this.onLogout.bind(this);
+  }
+
+  async componentDidMount() {
+    const { data } = await getUserLogged();
+
+    this.setState(() => {
+      return {
+        authedUser: data,
+        initializing: false
+      }
+    });
+  }
+
+  async onLoginSuccess({ accessToken }) {
+    putAccessToken(accessToken);
+    const { data } = await getUserLogged();
+
+    this.setState(() => {
+      return {
+        authedUser: data,
+      };
+    });
+  }
+
+  componentDidUpdate(prevState) {
+    if (prevState.theme !== this.state.theme) {
+      document.documentElement.setAttribute('data-theme', this.state.theme);
+    }
+  }
+
+  onLogout() {
+    this.setState(() => {
+      return {
+        authedUser: null
+      }
+    });
+
+    putAccessToken('');
+  }
+
+  render() {
+    if (this.state.initializing) {
+      return null;
+    }
+
+    if (this.state.authedUser === null) {
+      return (
+        <LocaleProvider value={this.state.localeContext}>
+        <ThemeProvider value={this.state}>
+        <div className='note-app'>
+          <header className='note-app-header'>
+            <ToggleTheme />
+            <h1>Aplikasi Catatan</h1>
+          </header>
+
+          <main>
+            <Routes>
+              <Route path='/*' element={<LoginPage loginSuccess={this.onLoginSuccess} />} />
+              <Route path='/register' element={<RegisterPage />} />
+            </Routes>
+          </main>
+        </div>
+        </ThemeProvider>
+        </LocaleProvider>
+      );
+    }
+
+    return (
+      <LocaleProvider value={this.state.localeContext}>
+      <ThemeProvider value={this.state}>
+      <div className='note-app'>
+        <header className='note-app-header'>
+          <h1>{this.state.localeContext.locale === 'id' ? 'Aplikasi Catatan' : 'Notes App'}</h1>
+          <ToggleTheme />
+          <Navigation logout={this.onLogout} name={this.state.authedUser.name} />
+        </header>
+        
+        <main>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/add" element={<AddPage />} />
+            <Route path="/notes/:id" element={<DetailPage />} />
+          </Routes>
+        </main>
+      </div>
+      </ThemeProvider>
+      </LocaleProvider>
+    );
+  }  
 }
 
 export default App;
